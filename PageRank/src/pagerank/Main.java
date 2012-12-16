@@ -5,6 +5,7 @@
 package pagerank;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Vector;
 
 
@@ -12,14 +13,50 @@ import java.util.Vector;
  *
  * @author martzy
  */
-public class Main {
-    public static Vector<Vector<Float>> A;
-    public static Vector<Integer> corespondent;
-    static int N; // numărul de CV-uri
-    static Vector<Float> initialRank = new Vector<Float>();
-    
+class Rating {
+    public Vector<Vector<Float>> A;
+    public Vector<Integer> corespondent;
+    int N; // numărul de CV-uri
+    Vector<Float> initialRank = new Vector<Float>();
 
-    public static Vector<Float> multiply() {
+
+    void calcRank(CV cv) {
+        int exp = cv.getExperience();
+        ArrayList<Language> lang = cv.getLanguage();
+        String degree = cv.getDegree();
+        //ArrayList<Skills> skills = cv.getSkills();
+        Float rat = new Float(0);
+
+        rat += exp / 2;
+        for (int i = 0; i < lang.size(); i++) {
+            rat += lang.get(i).getLevel() / 3;
+        }
+
+        if (degree.equals("Licenta"))
+            rat += new Float(0.5);
+        if (degree.equals("Masterat"))
+            rat += new Float(1.25);
+        if (degree.equals("Doctorat"))
+            rat += new Float(1.85);
+
+        System.out.println(rat);
+        cv.setRank(rat);
+    }
+    
+    /*
+     * Trebuie sa fie apelata la adaugarea unui nou CV. Se calculeaza un
+     * rating initial bazat doar pe cuvinte cheie din cv.
+     */
+    public void initialize() {
+        ArrayList<CV> CVs = Database.getAllCVs();
+
+        for (int k = 0; k < CVs.size(); k++) {
+            CV cv = CVs.get(k);
+            calcRank(cv);
+        }
+    }
+
+    public Vector<Float> multiply() {
         Vector<Float> result = new Vector<Float>();
         Vector<Float> aux = new Vector<Float>();
 
@@ -38,7 +75,7 @@ public class Main {
             result.add(temp);
         }
 
-        while(Math.abs(result.elementAt(0) - aux.elementAt(0)) > 0.05) {
+        while(Math.abs(result.elementAt(0) - aux.elementAt(0)) > 0.00005) {
             System.out.print("result: ");
             for(int i = 0; i < N; i++) {
                 aux.set(i, result.elementAt(i));
@@ -58,9 +95,10 @@ public class Main {
         return result;
     }
     
-    public static void makeMatrix() {
+    public void makeMatrix() {
         ArrayList<CV> cvs = Database.getAllCVs();
         N = Database.getNumberofCVs();
+        System.out.println (N + " " + cvs.size());
         for (int i = 0; i < N; i++) {
             Vector<Float> line = new Vector<Float>();
             
@@ -88,9 +126,15 @@ public class Main {
         }
     }
 
-    public static void addCV(int id_cv) {
+    
+    public void addCV(int id_cv) {
+        if (corespondent.contains(id_cv))
+            return;
         N++;
         Vector<Float> line = new Vector<Float>();
+        CV cv = Database.Instance.getCV(id_cv);
+        calcRank(cv);
+        initialRank.add(cv.getRank());
         
         /* daca nu exista like-uri pe coloană, A[N-1][j] nu mai trebuie modificat, dar restul coloanei trebuie
              Dacă există like-uri pe coloană A[N-1][j] trebuie sa fie 0, iar restul coloanei nu trebuie modificată.
@@ -123,10 +167,13 @@ public class Main {
     }
 
     /* CV1 dă like la CV2 */
-    public static void addLike(int id_cv1, int id_cv2) {
+    public void addLike(int id_cv1, int id_cv2) {
         int ind1 = corespondent.indexOf(id_cv1);
         int ind2 = corespondent.indexOf(id_cv2);
 
+        System.out.println("addLike: id_cv1 "+ id_cv1 + " id_cv2 " + id_cv2);
+        System.out.println("addLike: ind1 "+ ind1 + " ind " + ind2);
+        
         if (A.elementAt(0).elementAt(ind1) == 1/(float)N) {    //CV1 nu a dat niciun like, CV2 primeste primul like
             for (int i = 0; i < N; i++) {
                 A.elementAt(i).set(ind1, new Float(0));
@@ -145,18 +192,40 @@ public class Main {
         }
     }
 
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String[] args) {
+    ArrayList<Integer> getTop(Vector<Float> res) {
+        ArrayList<Integer> top = new ArrayList<Integer>();
+        ArrayList<Float> rat = new ArrayList<Float>();
+
+        for (int i = 0; i < corespondent.size(); i++) {
+            top.add(corespondent.elementAt(i));
+            rat.add(res.elementAt(i));
+        }
+
+        for (int i = 0; i < corespondent.size() - 1; i++) {
+            for (int j = i + 1; j < corespondent.size(); j++) {
+                if (rat.get(i) < rat.get(j)) {
+                    Float aux1 = rat.get(i);
+                    Integer aux2 = top.get(i);
+                    top.set(i, top.get(j));
+                    top.set(j, aux2);
+                    rat.set(i, rat.get(j));
+                    rat.set(j, aux1);
+                }
+            }
+        }
+
+        return top;
+    }
+
+    public void make() {
         A = new Vector<Vector<Float>>();
         corespondent = new Vector<Integer>();
         Database db = new Database();
-        makeMatrix();
-        ArrayList<CV> CVs = Database.getAllCVs();
         
-        addCV(33);
-        initialRank.add(new Float(2.8));
+        initialize();
+        makeMatrix();
+
+        addCV(30);
         
         System.out.println("N = " + N);
         System.out.println("matrix:");
@@ -167,7 +236,8 @@ public class Main {
             }
             System.out.println();
         }
-        System.out.println("corespondent:");
+        System.out.println(N);
+        System.out.println("corespondent (" + corespondent.size() + "):");
         for (int i = 0; i < N; i++) {
             System.out.print(corespondent.elementAt(i) + " ");
         }
@@ -181,8 +251,8 @@ public class Main {
             }
             System.out.println();
         }
-        addLike(30, 31);
-        addLike(27, 28);
+        addLike(30, 36);
+        addLike(37, 35);
         System.out.println("matrix:");
         for (int i = 0; i < N; i++) {
             Vector<Float> line = A.elementAt(i);
@@ -191,8 +261,7 @@ public class Main {
             }
             System.out.println();
         }
-        addCV(40);
-        initialRank.add(new Float(2.5));
+        addCV(44);
         
         for (int i = 0; i < N; i++) {
             Vector<Float> line = A.elementAt(i);
@@ -202,6 +271,23 @@ public class Main {
             System.out.println();
         }
 
-        multiply();
+        Vector<Float> all = multiply();
+        System.out.println(all);
+
+        System.out.println(corespondent);
+        ArrayList<Integer> top = getTop(all);
+        System.out.println(top);
+        
+    }
+}
+
+public class Main {
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) {
+        Rating r = new Rating();
+        r.make();
+        
     }
 }
